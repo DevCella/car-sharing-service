@@ -25,19 +25,25 @@ public class Payment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
-    private Status status;
+    private Status status = Status.PENDING;
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private PaymentType type;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rental_id", nullable = false)
     private Rental rental;
-    @Column(nullable = false)
+
+    @Column(nullable = false, length = 1024)
     private String sessionUrl;
+
     @Column(nullable = false, unique = true)
     private String sessionId;
+
     @Column(nullable = false)
     private BigDecimal amountToPay;
 }
