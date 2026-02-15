@@ -1,162 +1,229 @@
+Here is the clean, professional `README.md` for your **Car Sharing Service** project in English.
+
+---
+
 # 🚗 Car Sharing Service API
 
-An automated management system for a modern car sharing service. This project transforms an outdated paper-based system into a high-performance RESTful API, streamlining car inventory, user rentals, and automated payments.
+## 📌 Table of Contents
 
-## 🌟 Key Features
+* [🌟 Overview](https://www.google.com/search?q=%23-overview)
+* [🏗️ System Architecture](https://www.google.com/search?q=%23%EF%B8%8F-system-architecture)
+* [🔐 Authentication Flow](https://www.google.com/search?q=%23-authentication-flow)
+* [🔄 Rental Process Flow](https://www.google.com/search?q=%23-rental-process-flow)
+* [🛡️ Role-Based Access Control](https://www.google.com/search?q=%23%EF%B8%8F-role-based-access-control)
+* [🤖 Telegram Notifications](https://www.google.com/search?q=%23-telegram-notifications)
+* [💳 Payment Integration](https://www.google.com/search?q=%23-payment-integration)
+* [🛠 Technology Stack](https://www.google.com/search?q=%23-technology-stack)
+* [🚀 Key Features](https://www.google.com/search?q=%23-key-features)
+* [⚙️ Installation & Setup](https://www.google.com/search?q=%23%EF%B8%8F-installation--setup)
+* [📖 API Documentation](https://www.google.com/search?q=%23-api-documentation)
+* [🧪 Testing](https://www.google.com/search?q=%23-testing)
 
-* **🛡️ Secure Authentication**: JWT-based login and registration with role-based access control (Manager vs. Customer).
-* **🏎️ Inventory Management**: Real-time tracking of car availability and detailed specifications.
-* **📅 Rental Lifecycle**: Automated rental tracking, including overdue monitoring and instant inventory updates.
-* **💳 Stripe Integration**: Seamless credit card payments and fine calculation for overdue rentals.
-* **🤖 Telegram Notifications**: Instant alerts for new rentals, successful payments, and daily overdue reports.
-* **🐳 Dockerized**: Fully containerized environment for easy deployment.
+---
+
+## 🌟 Overview
+
+**Car Sharing Service** is a modern RESTful API platform designed to automate car rentals. The project eliminates manual
+paperwork by providing digital tools to manage car fleets, rentals, users, and automated payments via Stripe.
 
 ---
 
 ## 🏗️ System Architecture
 
-The system follows a layered architecture, ensuring separation of concerns between the API layer, business logic, and external integrations.
-
-```mermaid
-graph TD
-    subgraph Client_Layer
-        User((User/Admin))
-    end
-
-    subgraph API_Layer
-        AC[Auth Controller]
-        CC[Car Controller]
-        RC[Rental Controller]
-        PC[Payment Controller]
-        UC[User Controller]
-    end
-
-    subgraph Service_Layer
-        RS[Rental Service]
-        CS[Car Service]
-        PayS[Payment Service]
-        NS[Notification Service]
-    end
-
-    subgraph External_Integrations
-        Stripe((Stripe API))
-        Telegram((Telegram Bot))
-    end
-
-    subgraph Data_Layer
-        DB[(MySQL Database)]
-        JPA[Spring Data JPA]
-    end
-
-    User --> API_Layer
-    API_Layer --> Service_Layer
-    Service_Layer --> JPA
-    JPA --> DB
-    
-    RS --> NS
-    PayS --> Stripe
-    PayS --> NS
-    NS --> Telegram
-
-```
-
----
-
-## 📊 Database Schema
-
-The following diagram illustrates the relationships between users, cars, rentals, and payments.
+The following Entity-Relationship Diagram represents the core data model:
 
 ```mermaid
 erDiagram
-    USER ||--o{ RENTAL : makes
-    CAR ||--o{ RENTAL : "is rented"
-    RENTAL ||--|| PAYMENT : "has one"
+    USER ||--o{ RENTAL: "makes"
+    CAR ||--o{ RENTAL: "is rented"
+    RENTAL ||--|| PAYMENT: "triggers"
+    USER }|--|{ ROLE: "has"
 
     USER {
-        Long id
-        String email
-        String password
-        Enum role
+        bigint id PK
+        string email UK
+        string firstName
+        string lastName
+        string password
     }
 
     CAR {
-        Long id
-        String model
-        String brand
-        Enum type
-        Integer inventory
-        Decimal daily_fee
+        bigint id PK
+        string model
+        string brand
+        enum type
+        int inventory
+        decimal daily_fee
     }
 
     RENTAL {
-        Long id
-        LocalDate rental_date
-        LocalDate return_date
-        LocalDate actual_return_date
-        Long car_id
-        Long user_id
+        bigint id PK
+        date rentalDate
+        date returnDate
+        date actualReturnDate
+        boolean is_active
     }
 
     PAYMENT {
-        Long id
-        Enum status
-        Enum type
-        String session_url
-        String session_id
-        Decimal amount
+        bigint id PK
+        enum status
+        enum type
+        string session_url
+        string session_id
+        decimal amount
     }
 
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🔐 Authentication Flow
 
-### Prerequisites
+The system uses **JWT (JSON Web Token)** for secure communication:
 
-* **Java 17**
-* **Docker & Docker Compose**
-* **Stripe Account** (for API keys)
-* **Telegram Bot** (via BotFather)
+1. **Registration**: New users create an account via `POST /auth/register`.
+2. **Login**: Users authenticate via `POST /auth/login`.
+3. **Verification**: The server validates credentials (BCrypt) and issues a JWT.
+4. **Access**: Users include the token in the `Authorization: Bearer <token>` header for protected requests.
 
-### Installation
+---
 
-1. **Clone the repository:**
+## 🔄 Rental Process Flow
+
+The rental logic includes inventory validation and admin notifications:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant API as RentalController
+    participant DB as Database
+    participant TG as TelegramBot
+    User ->> API: POST /rentals (carId, returnDate)
+    API ->> DB: Check Car Inventory
+    alt Inventory > 0
+        API ->> DB: Decrease Inventory by 1
+        API ->> DB: Save Rental
+        API ->> TG: Send Notification: New Rental Created!
+        API -->> User: 201 Created (Rental Info)
+    else Inventory == 0
+        API -->> User: 400 Bad Request (Car unavailable)
+    end
+
+```
+
+---
+
+## 🛡️ Role-Based Access Control (RBAC)
+
+| Endpoint                      | MANAGER | CUSTOMER |
+|-------------------------------|---------|----------|
+| **GET /cars**                 | ✅       | ✅        |
+| **POST /cars**                | ✅       | ❌        |
+| **GET /users/me**             | ✅       | ✅        |
+| **PUT /users/{id}/role**      | ✅       | ❌        |
+| **POST /payments**            | ✅       | ✅        |
+| **POST /rentals/{id}/return** | ✅       | ✅        |
+
+---
+
+## 🤖 Telegram Notifications
+
+Integrated with the **Telegram Bot API** to keep managers informed:
+
+* **New Rental**: Instant notification when a car is booked.
+* **Overdue Task**: Daily scheduled check (using `@Scheduled`) for overdue rentals.
+* **Payment Alerts**: Notifications for successful Stripe transactions.
+
+---
+
+## 💳 Payment Integration
+
+Payments are handled via **Stripe API**:
+
+* Automatic session creation with rental total calculation.
+* Support for **Fines** (overdue returns) with a preconfigured multiplier.
+* Success and Cancel callback endpoints.
+
+---
+
+## 🛠 Technology Stack
+
+* **Java 17 / Spring Boot 3**
+* **Spring Security & JWT** — Authentication & Authorization.
+* **Hibernate / Spring Data JPA** — ORM & Data Persistence.
+* **MySQL** — Primary Database.
+* **Liquibase** — Database Schema Version Control.
+* **Stripe API** — Payment Processing.
+* **Telegram Bot API** — Notification Service.
+* **Docker & Docker Compose** — Containerization.
+* **MapStruct & Lombok** — Boilerplate reduction.
+
+---
+
+## 🚀 Key Features
+
+* **Soft Delete**: Uses Hibernate `@SQLDelete` to keep records in the DB while marking them deleted.
+* **Inventory Management**: Real-time tracking of car availability.
+* **Automatic Fines**: Calculates overdue charges based on return dates.
+* **Scalable Architecture**: Docker-ready for easy deployment.
+
+---
+
+## ⚙️ Installation & Setup
+
+### 1. Clone the repository
+
 ```bash
 git clone https://github.com/your-org/car-sharing-app.git
 cd car-sharing-app
 
 ```
 
+### 2. Environment Configuration
 
-2. **Configure Environment Variables:**
-   Create a `.env` file in the root directory based on `.env.sample`:
-```env
-MYSQL_ROOT_PASSWORD=your_pass
+Create a `.env` file in the root directory:
+
+```bash
+MYSQL_ROOT_PASSWORD=your_password
 STRIPE_SECRET_KEY=your_stripe_key
-TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_BOT_TOKEN=your_token
 TELEGRAM_CHAT_ID=your_chat_id
 
 ```
 
+### 3. Run with Docker
 
-3. **Run with Docker:**
 ```bash
+mvn clean package -DskipTests
 docker-compose up --build
 
 ```
 
+---
 
+## 📖 API Documentation
+
+The Swagger UI interactive documentation is available after launch:
+🔗 **http://localhost:8080/api/swagger-ui.html**
+
+### Default Admin Credentials:
+
+* **Email:** `admin@example.com`
+* **Password:** `admin12345`
 
 ---
 
-## 🛠️ API Endpoints
+## 🧪 Testing
 
-| Category | Method | Endpoint | Description |
-| --- | --- | --- | --- |
-| **Auth** | `POST` | `/register` | Register a new user |
-| **Cars** | `GET` | `/cars` | List all available cars |
-| **Rentals** | `POST` | `/rentals` | Create a new rental |
-| **Rentals** | `POST` | `/rentals/{id}/return` | Return a car |
-| **Payments** | `POST` | `/payments` | Create Stripe session |
-| **Users** | `GET` | `/users/me` | Get profile information |
+Run the test suite (JUnit 5, Mockito, Testcontainers):
+
+```bash
+mvn test
+
+```
+
+*The project maintains > 60% code coverage for core business logic.*
+
+---
+
+**Developed for Mate Academy** 📧 Contact: leadervlod@gmail.com
