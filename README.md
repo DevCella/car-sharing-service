@@ -1,36 +1,29 @@
-Here is the clean, professional `README.md` for your **Car Sharing Service** project in English.
-
----
-
 # 🚗 Car Sharing Service API
 
 ## 📌 Table of Contents
 
 * [🌟 Overview](https://www.google.com/search?q=%23-overview)
-* [🏗️ System Architecture](https://www.google.com/search?q=%23%EF%B8%8F-system-architecture)
-* [🔐 Authentication Flow](https://www.google.com/search?q=%23-authentication-flow)
-* [🔄 Rental Process Flow](https://www.google.com/search?q=%23-rental-process-flow)
-* [🛡️ Role-Based Access Control](https://www.google.com/search?q=%23%EF%B8%8F-role-based-access-control)
-* [🤖 Telegram Notifications](https://www.google.com/search?q=%23-telegram-notifications)
-* [💳 Payment Integration](https://www.google.com/search?q=%23-payment-integration)
-* [🛠 Technology Stack](https://www.google.com/search?q=%23-technology-stack)
-* [🚀 Key Features](https://www.google.com/search?q=%23-key-features)
-* [⚙️ Installation & Setup](https://www.google.com/search?q=%23%EF%B8%8F-installation--setup)
-* [📖 API Documentation](https://www.google.com/search?q=%23-api-documentation)
-* [🧪 Testing](https://www.google.com/search?q=%23-testing)
+* [🏗️ System Architecture](https://www.google.com/search?q=%23%25EF%25B8%258F-system-architecture)
+* [🔐 Authentication](https://www.google.com/search?q=%23-authentication)
+* [🔄 Rental Process](https://www.google.com/search?q=%23-rental-process)
+* [🛡️ Access Control](https://www.google.com/search?q=%23%25EF%25B8%258F-access-control)
+* [🤖 Notifications](https://www.google.com/search?q=%23-notifications)
+* [💳 Payments](https://www.google.com/search?q=%23-payments)
+* [🛠 Tech Stack](https://www.google.com/search?q=%23-technology-stack)
+* [⚙️ Setup](https://www.google.com/search?q=%23%25EF%25B8%258F-installation--setup)
+* [📖 Documentation](https://www.google.com/search?q=%23-api-documentation)
 
 ---
 
 ## 🌟 Overview
 
-**Car Sharing Service** is a modern RESTful API platform designed to automate car rentals. The project eliminates manual
-paperwork by providing digital tools to manage car fleets, rentals, users, and automated payments via Stripe.
+**Car Sharing Service** is a comprehensive RESTful API designed to automate vehicle rentals. It provides a digital infrastructure for managing car fleets, tracking active rentals, processing secure payments via Stripe, and keeping administrators informed through automated Telegram notifications.
 
 ---
 
 ## 🏗️ System Architecture
 
-The following Entity-Relationship Diagram represents the core data model:
+The core data model follows a relational structure optimized for consistency and performance:
 
 ```mermaid
 erDiagram
@@ -77,36 +70,35 @@ erDiagram
 
 ---
 
-## 🔐 Authentication Flow
+## 🔐 Authentication
 
-The system uses **JWT (JSON Web Token)** for secure communication:
+The API implements **JWT (JSON Web Token)** for stateless and secure authorization:
 
-1. **Registration**: New users create an account via `POST /auth/register`.
-2. **Login**: Users authenticate via `POST /auth/login`.
-3. **Verification**: The server validates credentials (BCrypt) and issues a JWT.
-4. **Access**: Users include the token in the `Authorization: Bearer <token>` header for protected requests.
+1. **Identity**: Password hashing via **BCrypt**.
+2. **Access**: Bearer tokens must be included in the `Authorization` header for all protected endpoints.
+3. **Security**: Token validation is performed by a dedicated filter in the Spring Security chain.
 
 ---
 
-## 🔄 Rental Process Flow
+## 🔄 Rental Process
 
-The rental logic includes inventory validation and admin notifications:
+The system ensures data integrity during the booking process:
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant API as RentalController
+    participant API as RentalService
     participant DB as Database
-    participant TG as TelegramBot
-    User ->> API: POST /rentals (carId, returnDate)
-    API ->> DB: Check Car Inventory
+    participant TG as TelegramService
+    User ->> API: Request Rental (carId)
+    API ->> DB: Validate Inventory
     alt Inventory > 0
-        API ->> DB: Decrease Inventory by 1
-        API ->> DB: Save Rental
-        API ->> TG: Send Notification: New Rental Created!
-        API -->> User: 201 Created (Rental Info)
-    else Inventory == 0
-        API -->> User: 400 Bad Request (Car unavailable)
+        API ->> DB: Decrement Inventory
+        API ->> DB: Save Rental Record
+        API ->> TG: Push Notification
+        API -->> User: 201 Created
+    else Out of Stock
+        API -->> User: 400 Bad Request
     end
 
 ```
@@ -115,83 +107,62 @@ sequenceDiagram
 
 ## 🛡️ Role-Based Access Control (RBAC)
 
-| Endpoint                      | MANAGER | CUSTOMER |
-|-------------------------------|---------|----------|
-| **GET /cars**                 | ✅       | ✅        |
-| **POST /cars**                | ✅       | ❌        |
-| **GET /users/me**             | ✅       | ✅        |
-| **PUT /users/{id}/role**      | ✅       | ❌        |
-| **POST /payments**            | ✅       | ✅        |
-| **POST /rentals/{id}/return** | ✅       | ✅        |
+The service enforces strict permission sets:
+
+* **Manager**: Full control over car inventory, user roles, and monitoring of all rentals.
+* **Customer**: Limited to managing their own profile, viewing cars, and processing their payments.
 
 ---
 
 ## 🤖 Telegram Notifications
 
-Integrated with the **Telegram Bot API** to keep managers informed:
+Integrated with the **Telegram Bot API** for real-time monitoring:
 
-* **New Rental**: Instant notification when a car is booked.
-* **Overdue Task**: Daily scheduled check (using `@Scheduled`) for overdue rentals.
-* **Payment Alerts**: Notifications for successful Stripe transactions.
+* **Real-time Alerts**: New rentals and successful payments.
+* **Scheduled Tasks**: Automatic daily checks for overdue rentals via Spring's `@Scheduled` tasks, notifying managers about unreturned vehicles.
 
 ---
 
 ## 💳 Payment Integration
 
-Payments are handled via **Stripe API**:
+Secure transactions are handled via **Stripe API**:
 
-* Automatic session creation with rental total calculation.
-* Support for **Fines** (overdue returns) with a preconfigured multiplier.
-* Success and Cancel callback endpoints.
+* **Dynamic Sessions**: Total price calculation based on rental duration.
+* **Fine System**: Automated multiplier for overdue returns.
+* **Callbacks**: Webhook-ready logic for handling successful and cancelled sessions.
 
 ---
 
 ## 🛠 Technology Stack
 
-* **Java 17 / Spring Boot 3**
-* **Spring Security & JWT** — Authentication & Authorization.
-* **Hibernate / Spring Data JPA** — ORM & Data Persistence.
-* **MySQL** — Primary Database.
-* **Liquibase** — Database Schema Version Control.
-* **Stripe API** — Payment Processing.
-* **Telegram Bot API** — Notification Service.
-* **Docker & Docker Compose** — Containerization.
-* **MapStruct & Lombok** — Boilerplate reduction.
-
----
-
-## 🚀 Key Features
-
-* **Soft Delete**: Uses Hibernate `@SQLDelete` to keep records in the DB while marking them deleted.
-* **Inventory Management**: Real-time tracking of car availability.
-* **Automatic Fines**: Calculates overdue charges based on return dates.
-* **Scalable Architecture**: Docker-ready for easy deployment.
+* **Backend**: Java 17, Spring Boot 3
+* **Security**: Spring Security, JWT, BCrypt
+* **Data**: Hibernate, Spring Data JPA, MySQL
+* **Migrations**: Liquibase
+* **Integrations**: Stripe API, Telegram Bot API
+* **DevOps**: Docker, Docker Compose
+* **Mapping**: MapStruct, Lombok
 
 ---
 
 ## ⚙️ Installation & Setup
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/your-org/car-sharing-app.git
-cd car-sharing-app
-
-```
-
-### 2. Environment Configuration
+### 1. Environment Configuration
 
 Create a `.env` file in the root directory:
 
 ```bash
-MYSQL_ROOT_PASSWORD=your_password
-STRIPE_SECRET_KEY=your_stripe_key
-TELEGRAM_BOT_TOKEN=your_token
+MYSQL_ROOT_PASSWORD=your_mysql_password
+MYSQL_DATABASE=car_sharing_db
+STRIPE_SECRET_KEY=your_stripe_secret
+TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
 
 ```
 
-### 3. Run with Docker
+### 2. Deployment
+
+Launch the entire infrastructure using Docker:
 
 ```bash
 mvn clean package -DskipTests
@@ -203,27 +174,22 @@ docker-compose up --build
 
 ## 📖 API Documentation
 
-The Swagger UI interactive documentation is available after launch:
+Once the service is running, explore the interactive Swagger UI:
 🔗 **http://localhost:8080/api/swagger-ui.html**
-
-### Default Admin Credentials:
-
-* **Email:** `admin@example.com`
-* **Password:** `admin12345`
 
 ---
 
 ## 🧪 Testing
 
-Run the test suite (JUnit 5, Mockito, Testcontainers):
+The project is backed by a robust test suite focusing on business-critical logic:
 
 ```bash
 mvn test
 
 ```
 
-*The project maintains > 60% code coverage for core business logic.*
+*Includes Integration Tests and Unit Tests for Services and Controllers.*
 
 ---
 
-**Developed for Mate Academy** 📧 Contact: leadervlod@gmail.com
+**Maintainer:** – leadervlod@gmail.com

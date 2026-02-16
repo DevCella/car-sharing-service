@@ -1,0 +1,1 @@
+MERGE INTO roles KEY(id) VALUES (1, 'ADMIN'), (2, 'CUSTOMER');

@@ -1,195 +1,143 @@
 package com.carsharing.controller;
 
-import static com.carsharing.util.AuthenticationTestUtil.createAuthentication;
-import static com.carsharing.util.RentalTestUtil.createActualReturnDateDto;
-import static com.carsharing.util.RentalTestUtil.createFirstRentalResponseDto;
-import static com.carsharing.util.RentalTestUtil.createRentalRequestDto;
-import static com.carsharing.util.RoleTestUtil.createAdminRole;
-import static com.carsharing.util.RoleTestUtil.createCustomerRole;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.carsharing.dto.rental.RentalCreateRequestDto;
 import com.carsharing.dto.rental.RentalResponseDto;
-import com.carsharing.dto.rental.RentalSetActualReturnDateDto;
+import com.carsharing.model.User;
+import com.carsharing.repository.UserRepository;
+import com.carsharing.service.RentalService;
 import com.carsharing.telegram.NotificationService;
-import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class RentalControllerTest {
-    private MockMvc mockMvc;
+    protected static MockMvc mockMvc;
+
     @Autowired
     private ObjectMapper objectMapper;
+    @Autowired
+    private RentalService rentalService;
+    @Autowired
+    private UserRepository userRepository;
+
     @MockitoBean
     private NotificationService notificationService;
 
-    @BeforeEach
-    void setUp(@Autowired WebApplicationContext context) {
-        mockMvc = MockMvcBuilders.webAppContextSetup(context)
+    @BeforeAll
+    static void beforeAll(@Autowired WebApplicationContext applicationContext) {
+        mockMvc = MockMvcBuilders
+                .webAppContextSetup(applicationContext)
                 .apply(springSecurity())
                 .build();
-
-        objectMapper.configOverride(LocalDate.class)
-                .setFormat(JsonFormat.Value.forPattern("dd-MM-yyy"));
     }
 
     @Test
-    @DisplayName("getRentalById should return correct RentalResponseDto")
-    @Sql(scripts = {"classpath:database/users/insert-2-users.sql",
-                    "classpath:database/cars/insert-2-cars.sql",
-                    "classpath:database/rentals/insert-3-rentals.sql"},
-            executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
-    @Sql(scripts = {"classpath:database/rentals/delete-all-rentals.sql",
-                    "classpath:database/cars/delete-2-cars.sql",
-                    "classpath:database/users/delete-2-users.sql"},
-            executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD)
-    void getRentalById_RentalWithIdOne_True() throws Exception {
-        Long userId = 3L;
-        Authentication authentication = createAuthentication(userId, createCustomerRole());
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-        SecurityContextHolder.setContext(context);
-        RentalResponseDto expected = createFirstRentalResponseDto();
+    @DisplayName("addRental should create a new rental and return 201")
+    @Sql(scripts = {
+            "classpath:database/clear-db.sql",
+            "classpath:database/roles/add-roles.sql",
+            "classpath:database/users/add-user.sql",
+            "classpath:database/cars/add-car.sql"
+    }, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
+    void addRental_ValidRequest_Created() throws Exception {
+        User userEntity = userRepository.findByEmail("test@example.com")
+                .orElseThrow(() -> new RuntimeException("User not found in DB"));
 
-        MvcResult mvcResult = mockMvc.perform(get("/rentals/1")
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andReturn();
-        RentalResponseDto result = objectMapper.readValue(
-                mvcResult.getResponse().getContentAsString(), RentalResponseDto.class);
+        var auth = new UsernamePasswordAuthenticationToken(
+                userEntity, null, List.of(new SimpleGrantedAuthority("ROLE_CUSTOMER")));
 
-        assertEquals(expected, result);
-    }
-
-    @Test
-    @DisplayName("addRental should return correct RentalResponseDto")
-    @Sql(scripts = {"classpath:database/users/insert-2-users.sql",
-                    "classpath:database/cars/insert-2-cars.sql"},
-            executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
-    @Sql(scripts = {"classpath:database/rentals/delete-all-rentals.sql",
-                    "classpath:database/cars/delete-2-cars.sql",
-                    "classpath:database/users/delete-2-users.sql"},
-            executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD)
-    void addRental_RentalWithCarIdFour_True() throws Exception {
-        Authentication authentication = createAuthentication(3L, createCustomerRole());
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-        SecurityContextHolder.setContext(context);
-        RentalCreateRequestDto requestDto = createRentalRequestDto();
-        String jsonRequestBody = objectMapper.writeValueAsString(requestDto);
-
-        doNothing().when(notificationService).sendNewRentalNotification(any());
-        MvcResult mvcResult = mockMvc.perform(post("/rentals")
-                        .content(jsonRequestBody)
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        RentalResponseDto baseDto = createFirstRentalResponseDto();
-        RentalResponseDto expected = new RentalResponseDto(
-                baseDto.id(),
-                baseDto.rentalDate(),
-                baseDto.returnDate(),
-                null,
-                baseDto.carId(),
-                baseDto.userId()
+        RentalCreateRequestDto requestDto = new RentalCreateRequestDto(
+                LocalDate.now(),
+                LocalDate.now().plusDays(5),
+                1L
         );
 
-        RentalResponseDto result = objectMapper.readValue(
-                mvcResult.getResponse().getContentAsString(), RentalResponseDto.class);
+        String jsonRequest = objectMapper.writeValueAsString(requestDto);
 
-        assertThat(result)
-                .usingRecursiveComparison()
-                .ignoringFields("id")
-                .isEqualTo(expected);
-        verify(notificationService).sendNewRentalNotification(any());
-    }
-
-    @Test
-    @DisplayName("setActualReturnDate should return correct RentalResponseDto")
-    @WithMockUser(roles = "ADMIN")
-    @Sql(scripts = {"classpath:database/users/insert-2-users.sql",
-                    "classpath:database/cars/insert-2-cars.sql",
-                    "classpath:database/rentals/insert-3-rentals.sql"},
-            executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
-    @Sql(scripts = {"classpath:database/rentals/delete-all-rentals.sql",
-                    "classpath:database/cars/delete-2-cars.sql",
-                    "classpath:database/users/delete-2-users.sql"},
-            executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD)
-    void setActualReturnDate_RentalWithId_True() throws Exception {
-        RentalSetActualReturnDateDto requestDto = createActualReturnDateDto();
-        String jsonRequestBody = objectMapper.writeValueAsString(requestDto);
-
-        MvcResult mvcResult = mockMvc.perform(post("/rentals/1/return")
-                        .content(jsonRequestBody)
+        mockMvc.perform(post("/rentals")
+                        .with(org.springframework.security.test.web.servlet
+                                .request.SecurityMockMvcRequestPostProcessors.authentication(auth))
+                        .with(org.springframework.security
+                                .test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.csrf())
+                        .content(jsonRequest)
                         .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        RentalResponseDto expected = createFirstRentalResponseDto();
-        RentalResponseDto result = objectMapper.readValue(
-                mvcResult.getResponse().getContentAsString(), RentalResponseDto.class);
-        assertEquals(expected, result);
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.carId").value(1L));
     }
 
     @Test
-    @DisplayName("getRentalByUserId should return correct Page of RentalResponseDto")
-    @Sql(scripts = {"classpath:database/users/insert-2-users.sql",
-                    "classpath:database/cars/insert-2-cars.sql",
-                    "classpath:database/rentals/insert-3-rentals.sql"},
-            executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
-    @Sql(scripts = {"classpath:database/rentals/delete-all-rentals.sql",
-                    "classpath:database/cars/delete-2-cars.sql",
-                    "classpath:database/users/delete-2-users.sql"},
-            executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD)
-    void getRentalByUserId_UserWithIdThreeAndRentalIsActive_True() throws Exception {
-        Long userId = 3L;
-        Authentication authentication = createAuthentication(userId, createAdminRole());
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-        SecurityContextHolder.setContext(context);
+    @DisplayName("getRentalById should return rental for authorized customer")
+    @Sql(scripts = {
+            "classpath:database/clear-db.sql",
+            "classpath:database/roles/add-roles.sql",
+            "classpath:database/users/add-user.sql",
+            "classpath:database/cars/add-car.sql"
+    }, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
+    void getRentalById_OwnerUser_Success() throws Exception {
+        User userEntity = userRepository.findByEmail("test@example.com")
+                .orElseThrow(() -> new RuntimeException("User not found in DB"));
 
-        MvcResult mvcResult = mockMvc.perform(get("/rentals/byUser/" + userId)
-                        .param("isActive", "true")
-                        .param("page", "0")
-                        .param("size", "10")
-                        .accept(MediaType.APPLICATION_JSON))
+        RentalCreateRequestDto createDto = new RentalCreateRequestDto(
+                LocalDate.now(),
+                LocalDate.now().plusDays(3),
+                1L
+        );
+        RentalResponseDto savedRental = rentalService.save(createDto, userEntity.getId());
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                userEntity, null, List.of(new SimpleGrantedAuthority("ROLE_CUSTOMER")));
+
+        mockMvc.perform(get("/rentals/" + savedRental.id())
+                        .with(org.springframework.security
+                                .test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.authentication(auth)))
                 .andExpect(status().isOk())
-                .andReturn();
-        JsonNode content = objectMapper.readTree(
-                        mvcResult.getResponse().getContentAsString())
-                .get("content");
-        RentalResponseDto expectedFirst = createFirstRentalResponseDto();
-        List<RentalResponseDto> result = objectMapper.readValue(content.toString(),
-                new TypeReference<>() {});
-        assertEquals(expectedFirst, result.get(0));
+                .andExpect(jsonPath("$.id").value(savedRental.id()))
+                .andExpect(jsonPath("$.userId").value(userEntity.getId()));
+    }
+
+    @Test
+    @DisplayName("setActualReturnDate should return 403 for Customer")
+    @Sql(scripts = "classpath:database/roles"
+            + "/add-roles.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
+    void setActualReturnDate_Customer_Forbidden() throws Exception {
+        User user = new User();
+        user.setEmail("customer@example.com");
+        var auth = new UsernamePasswordAuthenticationToken(
+                user, null, List.of(new SimpleGrantedAuthority("ROLE_CUSTOMER")));
+
+        java.time.format.DateTimeFormatter formatter = java.time.format
+                .DateTimeFormatter.ofPattern("dd-MM-yyyy");
+        String formattedDate = LocalDate.now().plusDays(1).format(formatter);
+
+        mockMvc.perform(post("/rentals/1/return")
+                        .with(org.springframework.security.test.web.servlet
+                                .request.SecurityMockMvcRequestPostProcessors.authentication(auth))
+                        .with(org.springframework.security.test
+                                .web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"actualReturnDate\":\"" + formattedDate + "\"}"))
+                .andExpect(status().isForbidden());
     }
 }

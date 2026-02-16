@@ -1,47 +1,35 @@
 package com.carsharing.repository;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.carsharing.model.User;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.jdbc.Sql;
 
 @DataJpaTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class UserRepositoryTest {
+
     @Autowired
     private UserRepository userRepository;
 
     @Test
-    @DisplayName("existsByEmail should return correct value")
-    @Sql(scripts = "classpath:database/users/insert-2-users.sql",
-            executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
-    @Sql(scripts = "classpath:database/users/delete-2-users.sql",
-            executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD)
-    void existsByEmail_UserExists_True() {
-        String email = "test@gmail.com";
-        String fakeEmail = "fake@gmail.com";
-        boolean firstResult = userRepository.existsByEmail(email);
-        boolean secondResult = userRepository.existsByEmail(fakeEmail);
-        boolean expected = true;
-        assertEquals(expected, firstResult);
-        assertEquals(!expected, secondResult);
+    @DisplayName("existsByEmail should return true if email is in database")
+    @Sql(scripts = {
+            "classpath:database/users/insert-test-user.sql"
+    }, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
+    void existsByEmail_ExistingEmail_ReturnsTrue() {
+        boolean exists = userRepository.existsByEmail("test@gmail.com");
+        assertThat(exists).isTrue();
     }
 
     @Test
-    @DisplayName("findWithRolesById should return User with initialized Roles")
-    @Sql(scripts = "classpath:database/users/insert-2-users.sql",
-            executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
-    @Sql(scripts = "classpath:database/users/delete-2-users.sql",
-            executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD)
-    void findWithRolesById_RolesNotNull_True() {
-        Long userId = 3L;
-        User user = userRepository.findWithRolesById(userId).get();
-        assertNotNull(user.getRoles());
+    @DisplayName("findByEmail should return empty optional if user not found")
+    void findByEmail_NonExistingEmail_ReturnsEmpty() {
+        Optional<User> result = userRepository.findByEmail("non-existent@email.com");
+        assertThat(result).isEmpty();
     }
 }

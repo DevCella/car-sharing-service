@@ -1,0 +1,4 @@
+DELETE FROM users_roles;
+DELETE FROM users;
+
+ALTER TABLE users ALTER COLUMN id RESTART WITH 1;
