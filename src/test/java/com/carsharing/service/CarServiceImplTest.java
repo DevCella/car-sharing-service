@@ -67,7 +67,6 @@ class CarServiceImplTest {
         Car car = createCar();
         car.setId(id);
 
-        // Створюємо новий об'єкт через конструктор замість setId()
         CarInfoResponseDto baseDto = createCarInfoResponseDto();
         CarInfoResponseDto expected = new CarInfoResponseDto(
                 id,

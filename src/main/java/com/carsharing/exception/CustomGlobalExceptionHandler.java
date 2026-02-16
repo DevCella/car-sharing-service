@@ -38,7 +38,7 @@ public class CustomGlobalExceptionHandler {
     }
 
     @ExceptionHandler({RegistrationException.class, PaymentProcessException.class})
-    public ResponseEntity<Object> handleConflictExceptions(RuntimeException ex) {
+    public ResponseEntity<Object> handleConflictExceptions(Exception ex) {
         Map<String, Object> body = createErrorBody(HttpStatus.CONFLICT);
         body.put("error", ex.getClass().getSimpleName());
         body.put("message", ex.getMessage());
@@ -48,10 +48,10 @@ public class CustomGlobalExceptionHandler {
     @ExceptionHandler(StripeSessionException.class)
     public ResponseEntity<Object> handleStripeSessionException(
             StripeSessionException ex) {
-        Map<String, Object> body = createErrorBody(HttpStatus.INTERNAL_SERVER_ERROR);
-        body.put("error", "Stripe Session Error");
-        body.put("message", ex.getMessage());
-        return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
+        Map<String, Object> body = createErrorBody(HttpStatus.SERVICE_UNAVAILABLE);
+        body.put("error", "Service Unavailable");
+        body.put("message", "Payment service is temporarily unavailable. " + ex.getMessage());
+        return new ResponseEntity<>(body, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @ExceptionHandler(AccessDeniedException.class)

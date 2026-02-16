@@ -1,16 +1,27 @@
 package com.carsharing.util;
 
-import static com.carsharing.util.UserTestUtil.createUser;
-
 import com.carsharing.model.Role;
 import com.carsharing.model.User;
+import java.util.List;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 public class AuthenticationTestUtil {
     public static Authentication createAuthentication(Long userId, Role role) {
-        User user = createUser(userId, role);
+        User user = new User();
+        user.setId(userId);
+        user.setEmail("test@gmail.com");
+
+        String authorityName = role.getName().name();
+        if (!authorityName.startsWith("ROLE_")) {
+            authorityName = "ROLE_" + authorityName;
+        }
+
         return new UsernamePasswordAuthenticationToken(
-                userId, null, user.getAuthorities());
+                user,
+                null,
+                List.of(new SimpleGrantedAuthority(authorityName))
+        );
     }
 }
